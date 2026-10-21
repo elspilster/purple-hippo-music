@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Artists · Purple Hippo Music</title><style>
+:root{font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#f8f4ff;background:#120a20}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0%,#43215d,transparent 50%),#120a20}header,main{max-width:960px;margin:auto;padding:24px}header{display:flex;align-items:center;justify-content:space-between;gap:16px}a{color:#dbb4ff}h1{font-size:clamp(32px,6vw,52px);margin-bottom:8px}p{color:#d0c1e0;line-height:1.6}button,input,textarea{font:inherit}button{background:#b987fa;color:#1d1030;border:0;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer}button:disabled{opacity:.5;cursor:wait}input,textarea{width:100%;padding:12px;background:#241633;border:1px solid #8664a5;border-radius:9px;color:#fff;margin:6px 0 16px}label{display:block;font-weight:650}textarea{min-height:120px}section{background:#ffffff0a;border:1px solid #ffffff23;border-radius:20px;padding:24px;margin:20px 0}.hidden{display:none}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}.tile{border:1px solid #ffffff22;border-radius:14px;padding:18px;background:#ffffff08}.tile h3{margin-top:0}.status{min-height:24px;color:#e7c8ff}.error{color:#ffb5bf}.actions{display:flex;flex-wrap:wrap;gap:10px}.secondary{background:#38254b;color:#fff}.hint{font-size:13px}input[type=checkbox]{width:auto;margin:0 8px 0 0}@media(max-width:600px){header{flex-direction:column;align-items:flex-start}section{padding:18px}}</style></head>
+<body><header><strong>🦛 Purple Hippo Music</strong><a href="/">← Back to music</a></header><main>
+<h1>Independent artists, welcome.</h1><p>Create your free artist page and introduce your music to listeners. Music uploads are coming next.</p>
+<p id="status" class="status" role="status" aria-live="polite">Connecting to artist services…</p>
+<section id="auth" class="hidden"><h2>Sign up or sign in</h2>
+<label>Email<input id="email" type="email" autocomplete="email" maxlength="254"></label>
+<label>Password<input id="password" type="password" autocomplete="current-password" minlength="8"></label>
+<div class="actions"><button id="signup">Create free account</button><button id="signin" class="secondary">Sign in</button><button id="reset" class="secondary">Reset password</button></div>
+<p class="hint">Check your inbox if Supabase asks you to confirm your email. Use a unique password. Accounts are free.</p></section>
+<section id="editor" class="hidden"><div class="actions" style="justify-content:space-between"><h2>Your artist page</h2><button id="signout" class="secondary">Sign out</button></div>
+<form id="profile">
+<label>Artist name<input id="artistName" maxlength="80" minlength="2" required></label>
+<label>Public page address (letters, numbers and hyphens)<input id="slug" maxlength="80" pattern="[a-z0-9]+(-[a-z0-9]+)*" required placeholder="my-band"></label>
+<label>Genre<input id="genre" maxlength="80" placeholder="Indie, rock, electronic…"></label>
+<label>About your music<textarea id="bio" maxlength="1000"></textarea></label>
+<label>Website or social link (optional)<input id="website" type="url" maxlength="300" placeholder="https://…"></label>
+<label><input id="published" type="checkbox">Publish my artist page so everyone can see it</label>
+<p class="hint">You can keep your page private while you're working on it. Don't include private contact details in your public bio.</p>
+<button type="submit">Save artist page</button></form>
+<p id="share"></p></section>
+<section><h2>Discover artists</h2><p id="empty">Loading published artists…</p><div id="catalogue" class="grid"></div></section>
+</main>
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const $=id=>document.getElementById(id), status=$('status');let supabase, user, profile;
+function say(message,error=false){status.textContent=message;status.classList.toggle('error',error)}
+function show(id,yes){$(id).classList.toggle('hidden',!yes)}
+function cleanSlug(s){return s.toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
+function setShare(slug){const a=document.createElement('a');a.href='/artists.html#'+encodeURIComponent(slug);a.textContent='View your public artist page';$('share').replaceChildren(a)}
+function fill(p){$('artistName').value=p?.artist_name||'';$('slug').value=p?.slug||'';$('slug').disabled=!!p;$('genre').value=p?.genre||'';$('bio').value=p?.bio||'';$('website').value=p?.website||'';$('published').checked=!!p?.is_published;$('share').replaceChildren();if(p?.is_published)setShare(p.slug)}
+async function refreshUser(){
+ const {data:{user:u},error}=await supabase.auth.getUser();if(error&&error.name!=='AuthSessionMissingError')say(error.message,true);
+ user=u;show('auth',!user);show('editor',!!user);profile=null;
+ if(user){const {data,error:e}=await supabase.from('artist_profiles').select('*').eq('user_id',user.id).maybeSingle();if(e)say(e.message,true);else{profile=data;fill(data);say('Signed in as '+user.email)}}else say('Browse artists below or create a free account.');
+}
+async function catalogue(){
+ const {data,error}=await supabase.from('artist_profiles').select('artist_name,slug,bio,genre,website').eq('is_published',true).order('created_at',{ascending:false}).limit(100);
+ if(error){$('empty').textContent='Could not load artists: '+error.message;return}
+ $('empty').textContent=data.length?'':'No published artist pages yet. Be among the first!';
+ $('catalogue').replaceChildren();
+ for(const p of data){const tile=document.createElement('article');tile.className='tile';const h=document.createElement('h3');h.textContent=p.artist_name;tile.append(h);if(p.genre){const g=document.createElement('p');g.textContent=p.genre;tile.append(g)}if(p.bio){const b=document.createElement('p');b.textContent=p.bio.length>180?p.bio.slice(0,180)+'…':p.bio;tile.append(b)}const a=document.createElement('a');a.href='#'+encodeURIComponent(p.slug);a.textContent='View artist →';tile.append(a);$('catalogue').append(tile)}
+ await showHash(data);
+}
+async function showHash(data){const slug=decodeURIComponent(location.hash.slice(1));if(!slug)return;const p=data.find(x=>x.slug===slug);if(!p)return;const detail=document.createElement('section');detail.id='artistDetail';const h=document.createElement('h2');h.textContent=p.artist_name;detail.append(h);for(const v of [p.genre,p.bio])if(v){const e=document.createElement('p');e.textContent=v;detail.append(e)}if(p.website){try{const u=new URL(p.website);if(['http:','https:'].includes(u.protocol)){const a=document.createElement('a');a.href=u.href;a.rel='noopener noreferrer nofollow';a.target='_blank';a.textContent='Artist website ↗';detail.append(a)}}catch{}}document.getElementById('artistDetail')?.remove();$('catalogue').before(detail)}
+$('signup').onclick=async()=>{const email=$('email').value.trim(),password=$('password').value;if(!email||password.length<8){say('Enter an email and a password of at least 8 characters.',true);return}say('Creating your account…');const {error}=await supabase.auth.signUp({email,password,options:{emailRedirectTo:location.origin+'/artists.html'}});if(error)say(error.message,true);else{say('Account requested. Check your email for a confirmation link if required.');await refreshUser()}};
+$('signin').onclick=async()=>{say('Signing in…');const {error}=await supabase.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)say(error.message,true);else await refreshUser()};
+$('reset').onclick=async()=>{const email=$('email').value.trim();if(!email){say('Enter your email first.',true);return}const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/artists.html'});say(error?error.message:'If this email has an account, a reset link has been sent.',!!error)};
+$('signout').onclick=async()=>{await supabase.auth.signOut();await refreshUser()};
+$('artistName').addEventListener('blur',()=>{if(!profile&&!$('slug').value)$('slug').value=cleanSlug($('artistName').value)});
+$('profile').onsubmit=async e=>{e.preventDefault();if(!user)return;const artist_name=$('artistName').value.trim(),slug=cleanSlug($('slug').value),bio=$('bio').value.trim(),genre=$('genre').value.trim(),website=$('website').value.trim();if(artist_name.length<2||!slug){say('Please enter a valid artist name and page address.',true);return}if(website){try{if(!['https:','http:'].includes(new URL(website).protocol))throw Error()}catch{say('Website must start with https:// or http://',true);return}}const values={artist_name,slug,bio,genre,website,is_published:$('published').checked};say('Saving…');const query=profile?supabase.from('artist_profiles').update(values).eq('user_id',user.id):supabase.from('artist_profiles').insert({...values,user_id:user.id});const {error}=await query;if(error){say(error.message,true);return}say('Artist page saved!');await refreshUser();await catalogue()};
+try{const response=await fetch('/api/public-config');const config=await response.json();if(!response.ok)throw Error(config.error||'Configuration unavailable');supabase=createClient(config.url,config.publishableKey);await refreshUser();await catalogue();supabase.auth.onAuthStateChange(()=>{setTimeout(refreshUser,0)});window.addEventListener('hashchange',()=>catalogue())}catch(e){say('Artist services unavailable: '+e.message,true)}
+</script></body></html>
