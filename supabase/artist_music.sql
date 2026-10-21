@@ -6,6 +6,13 @@ create table if not exists public.artist_tracks (
  storage_path text not null unique,
  created_at timestamptz not null default now()
 );
+-- Let PostgREST join tracks to their artist profiles.
+do $ begin
+ if not exists (select 1 from pg_constraint where conname='artist_tracks_profile_fk') then
+  alter table public.artist_tracks add constraint artist_tracks_profile_fk
+   foreign key (user_id) references public.artist_profiles(user_id) on delete cascade;
+ end if;
+end $;
 create index if not exists artist_tracks_user_idx on public.artist_tracks(user_id);
 alter table public.artist_tracks enable row level security;
 grant select on public.artist_tracks to anon, authenticated;
